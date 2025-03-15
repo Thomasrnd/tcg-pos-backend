@@ -1,7 +1,7 @@
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
-const config = require('../config/app');
+const sharp = require('sharp');
 
 // Ensure the upload directory exists
 const createUploadDir = (dir) => {
@@ -13,28 +13,26 @@ const createUploadDir = (dir) => {
 // Configure storage for payment proofs
 const paymentProofStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../', config.uploads.dir, config.uploads.paymentProofs);
+    const uploadDir = path.join(__dirname, '../../uploads/payment-proofs');
     createUploadDir(uploadDir);
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `payment-proof-${uniqueSuffix}${ext}`);
+    cb(null, `payment-proof-${uniqueSuffix}.jpg`); // We'll convert all images to JPG
   }
 });
 
 // Configure storage for product images
 const productImageStorage = multer.diskStorage({
   destination: (req, file, cb) => {
-    const uploadDir = path.join(__dirname, '../../', config.uploads.dir, config.uploads.products);
+    const uploadDir = path.join(__dirname, '../../uploads/products');
     createUploadDir(uploadDir);
     cb(null, uploadDir);
   },
   filename: (req, file, cb) => {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-    const ext = path.extname(file.originalname);
-    cb(null, `product-${uniqueSuffix}${ext}`);
+    cb(null, `product-${uniqueSuffix}.jpg`); // We'll convert all images to JPG
   }
 });
 
@@ -54,17 +52,69 @@ const imageFilter = (req, file, cb) => {
 // Create multer upload instances
 const uploadPaymentProof = multer({
   storage: paymentProofStorage,
-  limits: { fileSize: config.uploads.maxSize.paymentProof },
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5MB limit
   fileFilter: imageFilter
 });
 
 const uploadProductImage = multer({
   storage: productImageStorage,
-  limits: { fileSize: config.uploads.maxSize.productImage },
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
   fileFilter: imageFilter
 });
 
+// Compress payment proof image
+const compressPaymentProof = async (req, res, next) => {
+  if (!req.file) {
+    return next();
+  }
+
+  try {
+    const imagePath = req.file.path;
+    
+    // Compress and resize the image
+    await sharp(imagePath)
+      .resize(800) // Resize to max width of 800px (maintains aspect ratio)
+      .jpeg({ quality: 70 }) // Convert to JPEG with 70% quality
+      .toBuffer()
+      .then(buffer => {
+        fs.writeFileSync(imagePath, buffer); // Overwrite the original file
+      });
+    
+    next();
+  } catch (error) {
+    console.error('Error compressing payment proof:', error);
+    next(error);
+  }
+};
+
+// Compress product image
+const compressProductImage = async (req, res, next) => {
+  if (!req.file) {
+    return next();
+  }
+
+  try {
+    const imagePath = req.file.path;
+    
+    // Compress and resize the image
+    await sharp(imagePath)
+      .resize(1200) // Resize to max width of 1200px (maintains aspect ratio)
+      .jpeg({ quality: 80 }) // Convert to JPEG with 80% quality
+      .toBuffer()
+      .then(buffer => {
+        fs.writeFileSync(imagePath, buffer); // Overwrite the original file
+      });
+    
+    next();
+  } catch (error) {
+    console.error('Error compressing product image:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   uploadPaymentProof,
-  uploadProductImage
+  uploadProductImage,
+  compressPaymentProof,
+  compressProductImage
 };
