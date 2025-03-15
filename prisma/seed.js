@@ -31,35 +31,35 @@ async function main() {
         {
           name: 'Charizard Card',
           description: 'Rare Charizard Pokémon card',
-          price: 99.99,
+          price: 1500000,
           stock: 5,
           category: 'TCG_CARD'
         },
         {
           name: 'Card Sleeves',
           description: 'High quality card sleeves for protection',
-          price: 4.99,
+          price: 120000,
           stock: 100,
           category: 'ACCESSORY'
         },
         {
           name: 'Card Binder',
           description: 'Store and display your card collection',
-          price: 19.99,
+          price: 500000,
           stock: 30,
           category: 'ACCESSORY'
         },
         {
           name: 'Soda',
           description: 'Refreshing carbonated drink',
-          price: 1.99,
+          price: 7000,
           stock: 50,
           category: 'BEVERAGE'
         },
         {
-          name: 'Coffee',
-          description: 'Hot freshly brewed coffee',
-          price: 2.49,
+          name: 'Air Putih',
+          description: 'Mineral Water',
+          price: 5000,
           stock: 40,
           category: 'BEVERAGE'
         }
