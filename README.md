@@ -1,7 +1,3 @@
-# TCG Shop POS Backend
-
-Backend server for the TCG Shop Point of Sale system, built with Node.js, Express, and Prisma ORM.
-
 ## Technologies Used
 
 - Node.js
