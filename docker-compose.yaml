@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  tcg-be:
+    build: .
+    ports:
+      - "3112:3001"
+    depends_on:
+      - db-tcg
+    restart: always
+
+  db-tcg:
+    image: postgres:alpine
+    environment:
+      POSTGRES_USER: tcg-user
+      POSTGRES_PASSWORD: Tcg123
+      POSTGRES_DB: tcg
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5434:5432" 
+    restart: always
+
+volumes:
+  pgdata:
