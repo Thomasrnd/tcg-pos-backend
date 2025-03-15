@@ -6,6 +6,7 @@
 - PostgreSQL
 - JWT for authentication
 - Multer for file uploads
+- Sharp for image compression
 
 ## Installation
 
