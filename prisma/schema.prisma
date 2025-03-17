@@ -14,8 +14,14 @@ model Admin {
   id        Int      @id @default(autoincrement())
   username  String   @unique
   password  String
+  role      AdminRole @default(ADMIN)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum AdminRole {
+  MASTER_ADMIN
+  ADMIN
 }
 
 model Product {
@@ -24,18 +30,20 @@ model Product {
   description String?
   price       Float
   stock       Int
-  category    ProductCategory
+  category    ProductCategory @relation(fields: [categoryId], references: [id])
+  categoryId  Int
   imageUrl    String?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
   orderItems  OrderItem[]
 }
 
-enum ProductCategory {
-  TCG_CARD
-  ACCESSORY
-  BEVERAGE
-  OTHER
+model ProductCategory {
+  id          Int       @id @default(autoincrement())
+  name        String    @unique
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  products    Product[]
 }
 
 model Order {

@@ -1,3 +1,4 @@
+// prisma/seed.js
 const { prisma } = require('../src/config/db');
 const bcrypt = require('bcrypt');
 
@@ -14,13 +15,42 @@ async function main() {
     await prisma.admin.create({
       data: {
         username: 'admin4s',
-        password: hashedPassword
+        password: hashedPassword,
+        role: 'MASTER_ADMIN'
       }
     });
     console.log('Admin user created.');
   } else {
     console.log('Admin user already exists.');
   }
+
+  // Create default categories if they don't exist
+  const categories = [
+    { name: 'TCG_CARD' },
+    { name: 'ACCESSORY' },
+    { name: 'BEVERAGE' },
+    { name: 'OTHER' }
+  ];
+
+  for (const category of categories) {
+    const exists = await prisma.productCategory.findFirst({
+      where: { name: category.name }
+    });
+
+    if (!exists) {
+      await prisma.productCategory.create({
+        data: category
+      });
+      console.log(`Category ${category.name} created.`);
+    }
+  }
+
+  // Get category IDs for product creation
+  const categoryMap = {};
+  const allCategories = await prisma.productCategory.findMany();
+  allCategories.forEach(cat => {
+    categoryMap[cat.name] = cat.id;
+  });
 
   // Create sample products
   const productsCount = await prisma.product.count();
@@ -33,35 +63,35 @@ async function main() {
           description: 'Rare Charizard Pokémon card',
           price: 1500000,
           stock: 5,
-          category: 'TCG_CARD'
+          categoryId: categoryMap['TCG_CARD']
         },
         {
           name: 'Card Sleeves',
           description: 'High quality card sleeves for protection',
           price: 120000,
           stock: 100,
-          category: 'ACCESSORY'
+          categoryId: categoryMap['ACCESSORY']
         },
         {
           name: 'Card Binder',
           description: 'Store and display your card collection',
           price: 500000,
           stock: 30,
-          category: 'ACCESSORY'
+          categoryId: categoryMap['ACCESSORY']
         },
         {
           name: 'Soda',
           description: 'Refreshing carbonated drink',
           price: 7000,
           stock: 50,
-          category: 'BEVERAGE'
+          categoryId: categoryMap['BEVERAGE']
         },
         {
           name: 'Air Putih',
           description: 'Mineral Water',
           price: 5000,
           stock: 40,
-          category: 'BEVERAGE'
+          categoryId: categoryMap['BEVERAGE']
         }
       ]
     });

@@ -1,12 +1,14 @@
+// src/services/admin.service.js
 const { prisma } = require('../config/db');
 const { hashPassword, comparePassword, generateToken } = require('../utils/auth');
 
 /**
  * Service to handle admin registration
  * @param {Object} adminData - Admin data including username and password
+ * @param {AdminRole} role - Role for the new admin (default ADMIN)
  * @returns {Object} Newly created admin (without password)
  */
-const registerAdmin = async (adminData) => {
+const registerAdmin = async (adminData, role = 'ADMIN') => {
   const { username, password } = adminData;
 
   // Check if admin already exists
@@ -25,7 +27,8 @@ const registerAdmin = async (adminData) => {
   const newAdmin = await prisma.admin.create({
     data: {
       username,
-      password: hashedPassword
+      password: hashedPassword,
+      role
     }
   });
 
@@ -58,7 +61,7 @@ const loginAdmin = async (loginData) => {
   }
 
   // Generate JWT token
-  const token = generateToken({ id: admin.id, username: admin.username });
+  const token = generateToken({ id: admin.id, username: admin.username, role: admin.role });
 
   // Return admin info and token
   const { password: _, ...adminWithoutPassword } = admin;
@@ -149,9 +152,59 @@ const updateAdminProfile = async (adminId, updateData) => {
   return adminWithoutPassword;
 };
 
+/**
+ * Service to get all admins (except master admin)
+ * @returns {Array} List of all admins without password
+ */
+const getAllAdmins = async () => {
+  const admins = await prisma.admin.findMany({
+    where: {
+      role: 'ADMIN'
+    },
+    orderBy: {
+      createdAt: 'desc'
+    }
+  });
+  
+  return admins.map(admin => {
+    const { password, ...adminWithoutPassword } = admin;
+    return adminWithoutPassword;
+  });
+};
+
+/**
+ * Service to delete an admin (only for master admin)
+ * @param {number} adminId - Admin ID to delete
+ * @returns {Object} Deleted admin
+ */
+const deleteAdmin = async (adminId) => {
+  // Check if admin exists
+  const admin = await prisma.admin.findUnique({
+    where: { id: parseInt(adminId, 10) }
+  });
+  
+  if (!admin) {
+    throw new Error('Admin not found');
+  }
+  
+  if (admin.role === 'MASTER_ADMIN') {
+    throw new Error('Cannot delete master admin');
+  }
+  
+  // Delete the admin
+  const deletedAdmin = await prisma.admin.delete({
+    where: { id: parseInt(adminId, 10) }
+  });
+  
+  const { password: _, ...adminWithoutPassword } = deletedAdmin;
+  return adminWithoutPassword;
+};
+
 module.exports = {
   registerAdmin,
   loginAdmin,
   getAdminProfile,
-  updateAdminProfile
+  updateAdminProfile,
+  getAllAdmins,
+  deleteAdmin
 };

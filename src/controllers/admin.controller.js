@@ -1,3 +1,4 @@
+// src/controllers/admin.controller.js
 const adminService = require('../services/admin.service');
 
 /**
@@ -17,8 +18,19 @@ const registerAdmin = async (req, res) => {
       });
     }
     
+    // Get the role from request or default to 'ADMIN'
+    const role = req.body.role || 'ADMIN';
+    
+    // For normal routes, only allow 'ADMIN' role
+    if (!req.admin && role !== 'ADMIN') {
+      return res.status(403).json({
+        success: false,
+        message: 'You are not authorized to create an admin with this role'
+      });
+    }
+    
     // Call service to register admin
-    const newAdmin = await adminService.registerAdmin({ username, password });
+    const newAdmin = await adminService.registerAdmin({ username, password }, role);
     
     res.status(201).json({
       success: true,
@@ -160,6 +172,117 @@ const updateAdminProfile = async (req, res) => {
 };
 
 /**
+ * Controller to get all admins (for master admin)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getAllAdmins = async (req, res) => {
+  try {
+    // Call service to get all admins
+    const admins = await adminService.getAllAdmins();
+    
+    res.status(200).json({
+      success: true,
+      data: admins
+    });
+  } catch (error) {
+    console.error('Error getting admins:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get admins',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Controller to create a new admin (for master admin)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const createAdmin = async (req, res) => {
+  try {
+    const { username, password } = req.body;
+    
+    // Validate input
+    if (!username || !password) {
+      return res.status(400).json({
+        success: false,
+        message: 'Username and password are required'
+      });
+    }
+    
+    // Call service to register admin (always as ADMIN role)
+    const newAdmin = await adminService.registerAdmin({ username, password }, 'ADMIN');
+    
+    res.status(201).json({
+      success: true,
+      message: 'Admin created successfully',
+      data: newAdmin
+    });
+  } catch (error) {
+    console.error('Error creating admin:', error);
+    
+    // Handle specific errors
+    if (error.message.includes('already exists')) {
+      return res.status(409).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to create admin',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Controller to delete an admin (for master admin)
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const deleteAdmin = async (req, res) => {
+  try {
+    const adminId = req.params.id;
+    
+    // Call service to delete admin
+    const deletedAdmin = await adminService.deleteAdmin(adminId);
+    
+    res.status(200).json({
+      success: true,
+      message: 'Admin deleted successfully',
+      data: deletedAdmin
+    });
+  } catch (error) {
+    console.error('Error deleting admin:', error);
+    
+    if (error.message === 'Admin not found') {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    if (error.message === 'Cannot delete master admin') {
+      return res.status(403).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to delete admin',
+      error: error.message
+    });
+  }
+};
+
+/**
  * Controller to get sales report
  * @param {Object} req - Express request object
  * @param {Object} res - Express response object
@@ -235,5 +358,8 @@ module.exports = {
   loginAdmin,
   getAdminProfile,
   updateAdminProfile,
+  getAllAdmins,
+  createAdmin,
+  deleteAdmin,
   getSalesReport
 };

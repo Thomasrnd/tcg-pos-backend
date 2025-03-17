@@ -1,3 +1,4 @@
+// src/services/product.service.js
 const { prisma } = require('../config/db');
 const fs = require('fs');
 const path = require('path');
@@ -10,7 +11,16 @@ const config = require('../config/app');
  * @returns {Object} Newly created product
  */
 const createProduct = async (productData, fileInfo = null) => {
-  const { name, description, price, stock, category } = productData;
+  const { name, description, price, stock, categoryId } = productData;
+  
+  // Validate category exists
+  const category = await prisma.productCategory.findUnique({
+    where: { id: parseInt(categoryId, 10) }
+  });
+  
+  if (!category) {
+    throw new Error('Selected category does not exist');
+  }
   
   // Prepare product data
   const newProductData = {
@@ -18,7 +28,7 @@ const createProduct = async (productData, fileInfo = null) => {
     description,
     price: parseFloat(price),
     stock: parseInt(stock, 10),
-    category
+    categoryId: parseInt(categoryId, 10)
   };
   
   // Add image URL if a file was uploaded
@@ -29,7 +39,10 @@ const createProduct = async (productData, fileInfo = null) => {
   
   // Create product in database
   const newProduct = await prisma.product.create({
-    data: newProductData
+    data: newProductData,
+    include: {
+      category: true
+    }
   });
   
   return newProduct;
@@ -42,7 +55,7 @@ const createProduct = async (productData, fileInfo = null) => {
  */
 const getAllProducts = async (queryParams = {}) => {
   const { 
-    category, 
+    categoryId, 
     search,
     minPrice,
     maxPrice,
@@ -59,8 +72,8 @@ const getAllProducts = async (queryParams = {}) => {
   // Build filter conditions
   const where = {};
   
-  if (category) {
-    where.category = category;
+  if (categoryId) {
+    where.categoryId = parseInt(categoryId, 10);
   }
   
   if (search) {
@@ -95,6 +108,9 @@ const getAllProducts = async (queryParams = {}) => {
     take,
     orderBy: {
       [sortBy]: sortOrder
+    },
+    include: {
+      category: true
     }
   });
   
@@ -119,7 +135,10 @@ const getAllProducts = async (queryParams = {}) => {
  */
 const getProductById = async (productId) => {
   const product = await prisma.product.findUnique({
-    where: { id: parseInt(productId, 10) }
+    where: { id: parseInt(productId, 10) },
+    include: {
+      category: true
+    }
   });
   
   if (!product) {
@@ -137,7 +156,7 @@ const getProductById = async (productId) => {
  * @returns {Object} Updated product
  */
 const updateProduct = async (productId, updateData, fileInfo = null) => {
-  const { name, description, price, stock, category } = updateData;
+  const { name, description, price, stock, categoryId } = updateData;
   
   // Find the product
   const product = await prisma.product.findUnique({
@@ -155,7 +174,19 @@ const updateProduct = async (productId, updateData, fileInfo = null) => {
   if (description !== undefined) updateFields.description = description;
   if (price !== undefined) updateFields.price = parseFloat(price);
   if (stock !== undefined) updateFields.stock = parseInt(stock, 10);
-  if (category !== undefined) updateFields.category = category;
+  
+  // Validate and set category if provided
+  if (categoryId !== undefined) {
+    const category = await prisma.productCategory.findUnique({
+      where: { id: parseInt(categoryId, 10) }
+    });
+    
+    if (!category) {
+      throw new Error('Selected category does not exist');
+    }
+    
+    updateFields.categoryId = parseInt(categoryId, 10);
+  }
   
   // Handle image update
   if (fileInfo) {
@@ -175,7 +206,10 @@ const updateProduct = async (productId, updateData, fileInfo = null) => {
   // Update product in database
   const updatedProduct = await prisma.product.update({
     where: { id: parseInt(productId, 10) },
-    data: updateFields
+    data: updateFields,
+    include: {
+      category: true
+    }
   });
   
   return updatedProduct;
@@ -189,7 +223,10 @@ const updateProduct = async (productId, updateData, fileInfo = null) => {
 const deleteProduct = async (productId) => {
   // Find the product
   const product = await prisma.product.findUnique({
-    where: { id: parseInt(productId, 10) }
+    where: { id: parseInt(productId, 10) },
+    include: {
+      category: true
+    }
   });
   
   if (!product) {
@@ -206,7 +243,10 @@ const deleteProduct = async (productId) => {
   
   // Delete product from database
   const deletedProduct = await prisma.product.delete({
-    where: { id: parseInt(productId, 10) }
+    where: { id: parseInt(productId, 10) },
+    include: {
+      category: true
+    }
   });
   
   return deletedProduct;
@@ -237,6 +277,9 @@ const updateProductStock = async (productId, quantity) => {
     where: { id: parseInt(productId, 10) },
     data: {
       stock: product.stock - quantity
+    },
+    include: {
+      category: true
     }
   });
   
