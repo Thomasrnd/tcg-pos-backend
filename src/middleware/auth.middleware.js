@@ -1,3 +1,4 @@
+// src/middleware/auth.middleware.js
 const { verifyToken } = require('../utils/auth');
 const { prisma } = require('../config/db');
 
@@ -41,7 +42,8 @@ const authenticateAdmin = async (req, res, next) => {
     // Attach admin to request object
     req.admin = {
       id: admin.id,
-      username: admin.username
+      username: admin.username,
+      role: admin.role
     };
     
     next();
@@ -54,6 +56,21 @@ const authenticateAdmin = async (req, res, next) => {
   }
 };
 
+/**
+ * Middleware to check if user is a master admin
+ */
+const requireMasterAdmin = (req, res, next) => {
+  if (req.admin && req.admin.role === 'MASTER_ADMIN') {
+    return next();
+  }
+  
+  return res.status(403).json({
+    success: false,
+    message: 'Access denied. Only master admin can perform this action.'
+  });
+};
+
 module.exports = {
-  authenticateAdmin
+  authenticateAdmin,
+  requireMasterAdmin
 };
