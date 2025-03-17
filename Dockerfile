@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 node:22-alpine AS builder
+FROM --platform=linux/ARM64 node:22-alpine AS builder
 
 # Set working directory
 WORKDIR /app
@@ -19,7 +19,7 @@ RUN npx prisma generate
 # RUN npm run seed
 
 # Use a smaller runtime image
-FROM --platform=linux/amd64 node:22-alpine AS runtime
+FROM --platform=linux/ARM64 node:22-alpine AS runtime
 
 WORKDIR /app
 
