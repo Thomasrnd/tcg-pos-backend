@@ -1,3 +1,4 @@
+// src/controllers/order.controller.js
 const { prisma } = require('../config/db');
 const orderService = require('../services/order.service');
 
@@ -81,7 +82,8 @@ const uploadPaymentProof = async (req, res) => {
       });
     }
     
-    if (error.message.includes('can only be uploaded for pending orders')) {
+    if (error.message.includes('can only be uploaded for pending orders') || 
+        error.message.includes('not required for')) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -123,7 +125,10 @@ const verifyPayment = async (req, res) => {
       });
     }
     
-    if (error.message.includes('Only orders with uploaded payment')) {
+    if (error.message.includes('Only orders with uploaded payment') ||
+        error.message.includes('No payment proof found') ||
+        error.message.includes('Only pending or already verified') ||
+        error.message.includes('Cannot verify payment')) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -207,7 +212,7 @@ const cancelOrder = async (req, res) => {
       });
     }
     
-    if (error.message.includes('Only pending or payment uploaded orders')) {
+    if (error.message.includes('can be cancelled')) {
       return res.status(400).json({
         success: false,
         message: error.message
@@ -352,71 +357,12 @@ const getDailySalesReport = async (req, res) => {
       });
     }
 
-    // Parse the date and set start/end of the day
-    const reportDate = new Date(date);
-    reportDate.setHours(0, 0, 0, 0);
-    
-    const nextDay = new Date(reportDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    
-    // Find all completed orders for the selected date
-    const completedOrders = await prisma.order.findMany({
-      where: {
-        status: 'COMPLETED',
-        createdAt: {
-          gte: reportDate,
-          lt: nextDay
-        }
-      },
-      include: {
-        orderItems: {
-          include: {
-            product: true
-          }
-        }
-      }
-    });
-    
-    // Calculate totals
-    const totalSales = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
-    const totalOrders = completedOrders.length;
-    
-    // Calculate product sales
-    const productSalesMap = {};
-    
-    completedOrders.forEach(order => {
-      order.orderItems.forEach(item => {
-        const { product, quantity, subtotal } = item;
-        
-        if (!productSalesMap[product.id]) {
-          productSalesMap[product.id] = {
-            productId: product.id,
-            name: product.name,
-            category: product.category,
-            price: product.price,
-            imageUrl: product.imageUrl,
-            quantitySold: 0,
-            revenue: 0
-          };
-        }
-        
-        productSalesMap[product.id].quantitySold += quantity;
-        productSalesMap[product.id].revenue += subtotal;
-      });
-    });
-    
-    const productSales = Object.values(productSalesMap).sort((a, b) => b.revenue - a.revenue);
-    const totalItems = productSales.reduce((sum, product) => sum + product.quantitySold, 0);
+    // Call service to get daily sales report
+    const reportData = await orderService.getDailySalesReport(date);
     
     res.status(200).json({
       success: true,
-      data: {
-        date: reportDate,
-        totalSales,
-        totalOrders,
-        totalItems,
-        productSales
-      }
+      data: reportData
     });
   } catch (error) {
     console.error('Error generating daily sales report:', error);
@@ -424,6 +370,30 @@ const getDailySalesReport = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Failed to generate sales report',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Controller to get available payment methods
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getPaymentMethods = async (req, res) => {
+  try {
+    const paymentMethods = await orderService.getPaymentMethods();
+    
+    res.status(200).json({
+      success: true,
+      data: paymentMethods
+    });
+  } catch (error) {
+    console.error('Error getting payment methods:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get payment methods',
       error: error.message
     });
   }
@@ -439,5 +409,6 @@ module.exports = {
   getOrderById,
   getPendingOrdersCount,
   getSalesSummary,
-  getDailySalesReport
+  getDailySalesReport,
+  getPaymentMethods
 };

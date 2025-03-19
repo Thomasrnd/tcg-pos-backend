@@ -4,6 +4,9 @@ CREATE TYPE "AdminRole" AS ENUM ('MASTER_ADMIN', 'ADMIN');
 -- CreateEnum
 CREATE TYPE "OrderStatus" AS ENUM ('PENDING', 'PAYMENT_UPLOADED', 'PAYMENT_VERIFIED', 'COMPLETED', 'CANCELLED');
 
+-- CreateEnum
+CREATE TYPE "PaymentMethod" AS ENUM ('BANK_TRANSFER', 'CASH', 'QRIS', 'E_WALLET');
+
 -- CreateTable
 CREATE TABLE "Admin" (
     "id" SERIAL NOT NULL,
@@ -47,6 +50,7 @@ CREATE TABLE "Order" (
     "customerName" TEXT NOT NULL,
     "totalAmount" DOUBLE PRECISION NOT NULL,
     "status" "OrderStatus" NOT NULL,
+    "paymentMethod" "PaymentMethod" NOT NULL DEFAULT 'BANK_TRANSFER',
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
 
@@ -77,6 +81,21 @@ CREATE TABLE "PaymentProof" (
     CONSTRAINT "PaymentProof_pkey" PRIMARY KEY ("id")
 );
 
+-- CreateTable
+CREATE TABLE "PaymentMethodSetting" (
+    "id" SERIAL NOT NULL,
+    "method" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "description" TEXT,
+    "isEnabled" BOOLEAN NOT NULL DEFAULT true,
+    "requiresProof" BOOLEAN NOT NULL DEFAULT false,
+    "sortOrder" INTEGER NOT NULL DEFAULT 0,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
+
+    CONSTRAINT "PaymentMethodSetting_pkey" PRIMARY KEY ("id")
+);
+
 -- CreateIndex
 CREATE UNIQUE INDEX "Admin_username_key" ON "Admin"("username");
 
@@ -91,6 +110,9 @@ CREATE INDEX "OrderItem_productId_idx" ON "OrderItem"("productId");
 
 -- CreateIndex
 CREATE UNIQUE INDEX "PaymentProof_orderId_key" ON "PaymentProof"("orderId");
+
+-- CreateIndex
+CREATE UNIQUE INDEX "PaymentMethodSetting_method_key" ON "PaymentMethodSetting"("method");
 
 -- AddForeignKey
 ALTER TABLE "Product" ADD CONSTRAINT "Product_categoryId_fkey" FOREIGN KEY ("categoryId") REFERENCES "ProductCategory"("id") ON DELETE RESTRICT ON UPDATE CASCADE;

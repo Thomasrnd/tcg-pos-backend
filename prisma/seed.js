@@ -45,6 +45,55 @@ async function main() {
     }
   }
 
+  // Create default payment methods if they don't exist
+  const paymentMethods = [
+    { 
+      method: 'BANK_TRANSFER', 
+      name: 'Bank Transfer', 
+      description: 'Transfer payment to our bank account',
+      isEnabled: true,
+      requiresProof: true,
+      sortOrder: 1
+    },
+    { 
+      method: 'CASH', 
+      name: 'Cash', 
+      description: 'Pay with cash at pickup',
+      isEnabled: true,
+      requiresProof: false,
+      sortOrder: 2
+    },
+    { 
+      method: 'CREDIT_CARD', 
+      name: 'Credit Card', 
+      description: 'Pay with credit card (coming soon)',
+      isEnabled: false,
+      requiresProof: false,
+      sortOrder: 3
+    },
+    { 
+      method: 'E_WALLET', 
+      name: 'E-Wallet', 
+      description: 'Pay with e-wallet (coming soon)',
+      isEnabled: false,
+      requiresProof: false,
+      sortOrder: 4
+    }
+  ];
+
+  for (const method of paymentMethods) {
+    const exists = await prisma.paymentMethodSetting.findFirst({
+      where: { method: method.method }
+    });
+
+    if (!exists) {
+      await prisma.paymentMethodSetting.create({
+        data: method
+      });
+      console.log(`Payment method ${method.name} created.`);
+    }
+  }
+
   // Get category IDs for product creation
   const categoryMap = {};
   const allCategories = await prisma.productCategory.findMany();

@@ -1,3 +1,4 @@
+// src/routes/order.routes.js
 const express = require('express');
 const router = express.Router();
 const orderController = require('../controllers/order.controller');
@@ -8,6 +9,7 @@ const { handlePaymentProofUpload } = require('../middleware/upload.middleware');
 router.post('/', orderController.createOrder);
 router.post('/:id/payment-proof', handlePaymentProofUpload, orderController.uploadPaymentProof);
 router.get('/:id', orderController.getOrderById);
+router.get('/payment-methods/available', orderController.getPaymentMethods); // New endpoint
 
 // Protected routes - only accessible by admin
 router.get('/', authenticateAdmin, orderController.getAllOrders);

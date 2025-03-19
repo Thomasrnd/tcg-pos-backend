@@ -9,6 +9,7 @@ const adminRoutes = require('./routes/admin.routes');
 const productRoutes = require('./routes/product.routes');
 const orderRoutes = require('./routes/order.routes');
 const categoryRoutes = require('./routes/category.routes');
+const paymentSettingsRoutes = require('./routes/payment-settings.routes');
 
 // Initialize Express app
 const app = express();
@@ -27,6 +28,7 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/categories', categoryRoutes);
+app.use('/api/payment-settings', paymentSettingsRoutes);
 
 // Root route
 app.get('/', (req, res) => {
