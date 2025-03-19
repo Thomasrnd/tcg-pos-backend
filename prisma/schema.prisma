@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_DEV")
 }
 
 model Admin {
@@ -47,14 +47,15 @@ model ProductCategory {
 }
 
 model Order {
-  id           Int        @id @default(autoincrement())
-  customerName String
-  totalAmount  Float
-  status       OrderStatus
-  paymentProof PaymentProof?
-  orderItems   OrderItem[]
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  id            Int           @id @default(autoincrement())
+  customerName  String
+  totalAmount   Float
+  status        OrderStatus
+  paymentMethod PaymentMethod @default(BANK_TRANSFER)
+  paymentProof  PaymentProof?
+  orderItems    OrderItem[]
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 }
 
 enum OrderStatus {
@@ -87,4 +88,23 @@ model PaymentProof {
   orderId   Int      @unique
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+}
+
+enum PaymentMethod {
+  BANK_TRANSFER
+  CASH
+  QRIS  // For future use
+  E_WALLET     // For future use
+}
+
+model PaymentMethodSetting {
+  id            Int       @id @default(autoincrement())
+  method        String    @unique // e.g. "BANK_TRANSFER", "CASH", etc.
+  name          String    // Display name
+  description   String?   // Optional description
+  isEnabled     Boolean   @default(true)
+  requiresProof Boolean   @default(false)
+  sortOrder     Int       @default(0) // For controlling display order
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }

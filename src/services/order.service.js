@@ -1,3 +1,5 @@
+// src/services/order.service.js
+
 const { prisma } = require('../config/db');
 const fs = require('fs');
 const path = require('path');
@@ -9,10 +11,22 @@ const config = require('../config/app');
  * @returns {Object} Newly created order
  */
 const createOrder = async (orderData) => {
-  const { customerName, items } = orderData;
+  const { customerName, items, paymentMethod = 'BANK_TRANSFER' } = orderData;
   
   if (!items || items.length === 0) {
     throw new Error('Order must contain at least one item');
+  }
+  
+  // Validate that payment method is enabled
+  const paymentMethodSetting = await prisma.paymentMethodSetting.findFirst({
+    where: {
+      method: paymentMethod,
+      isEnabled: true
+    }
+  });
+  
+  if (!paymentMethodSetting) {
+    throw new Error(`Payment method ${paymentMethod} is not available`);
   }
   
   // Calculate total amount and validate items
@@ -43,6 +57,10 @@ const createOrder = async (orderData) => {
     });
   }
   
+  // Determine initial status based on payment method
+  // Cash payments can skip directly to PAYMENT_VERIFIED status
+  const initialStatus = paymentMethod === 'CASH' ? 'PAYMENT_VERIFIED' : 'PENDING';
+  
   // Create order with transaction to ensure data consistency
   const newOrder = await prisma.$transaction(async (prisma) => {
     // Create the order
@@ -50,7 +68,8 @@ const createOrder = async (orderData) => {
       data: {
         customerName,
         totalAmount,
-        status: 'PENDING',
+        status: initialStatus,
+        paymentMethod,
         orderItems: {
           create: orderItems
         }
@@ -91,6 +110,15 @@ const uploadPaymentProof = async (orderId, fileInfo) => {
   
   if (order.status !== 'PENDING') {
     throw new Error('Payment proof can only be uploaded for pending orders');
+  }
+  
+  // Check if payment method requires proof
+  const paymentMethodSetting = await prisma.paymentMethodSetting.findFirst({
+    where: { method: order.paymentMethod }
+  });
+  
+  if (!paymentMethodSetting || !paymentMethodSetting.requiresProof) {
+    throw new Error(`Payment proof upload is not required for ${order.paymentMethod} payment method`);
   }
   
   // Create relative path for the payment proof
@@ -171,12 +199,30 @@ const verifyPayment = async (orderId) => {
     throw new Error('Order not found');
   }
   
-  if (order.status !== 'PAYMENT_UPLOADED') {
-    throw new Error('Only orders with uploaded payment can be verified');
+  // Get payment method settings
+  const paymentMethodSetting = await prisma.paymentMethodSetting.findFirst({
+    where: { method: order.paymentMethod }
+  });
+  
+  if (!paymentMethodSetting) {
+    throw new Error(`Payment method ${order.paymentMethod} configuration not found`);
   }
   
-  if (!order.paymentProof) {
-    throw new Error('No payment proof found for this order');
+  // Handle different payment methods based on their settings
+  if (paymentMethodSetting.requiresProof) {
+    // For methods that require proof (like bank transfer)
+    if (order.status !== 'PAYMENT_UPLOADED') {
+      throw new Error('Only orders with uploaded payment can be verified');
+    }
+    
+    if (!order.paymentProof) {
+      throw new Error(`No payment proof found for this ${order.paymentMethod} order`);
+    }
+  } else {
+    // For methods that don't require proof (like cash)
+    if (order.status !== 'PENDING' && order.status !== 'PAYMENT_VERIFIED') {
+      throw new Error('Only pending or already verified orders can be processed');
+    }
   }
   
   // Update order status to payment verified
@@ -272,8 +318,8 @@ const cancelOrder = async (orderId) => {
   }
   
   // Only pending or payment uploaded orders can be cancelled
-  if (!['PENDING', 'PAYMENT_UPLOADED'].includes(order.status)) {
-    throw new Error('Only pending or payment uploaded orders can be cancelled');
+  if (!['PENDING', 'PAYMENT_UPLOADED', 'PAYMENT_VERIFIED'].includes(order.status)) {
+    throw new Error('Only pending, payment uploaded, or payment verified orders can be cancelled');
   }
   
   // Update order status to cancelled
@@ -304,6 +350,7 @@ const getAllOrders = async (queryParams = {}) => {
   const { 
     status, 
     customerName,
+    paymentMethod,
     startDate,
     endDate,
     page = 1, 
@@ -320,6 +367,10 @@ const getAllOrders = async (queryParams = {}) => {
   
   if (status) {
     where.status = status;
+  }
+  
+  if (paymentMethod) {
+    where.paymentMethod = paymentMethod;
   }
   
   if (customerName) {
@@ -406,13 +457,27 @@ const getOrderById = async (orderId) => {
  * @returns {number} Count of pending orders with uploaded payments
  */
 const getPendingOrdersCount = async () => {
-  const count = await prisma.order.count({
+  // Bank transfer orders with uploaded payment proofs
+  const bankTransferCount = await prisma.order.count({
     where: {
-      status: 'PAYMENT_UPLOADED'
+      status: 'PAYMENT_UPLOADED',
+      paymentMethod: 'BANK_TRANSFER'
     }
   });
   
-  return { count };
+  // Cash orders waiting to be completed
+  const cashCount = await prisma.order.count({
+    where: {
+      status: 'PAYMENT_VERIFIED',
+      paymentMethod: 'CASH'
+    }
+  });
+  
+  return { 
+    count: bankTransferCount + cashCount,
+    bankTransferCount,
+    cashCount
+  };
 };
 
 /**
@@ -446,6 +511,16 @@ const getSalesSummary = async (queryParams = {}) => {
   
   // Get today's total sales amount
   const dailyTotalSales = await prisma.order.aggregate({
+    where: dailyWhere,
+    _sum: {
+      totalAmount: true
+    },
+    _count: true
+  });
+  
+  // Get sales by payment method for today
+  const dailyPaymentMethods = await prisma.order.groupBy({
+    by: ['paymentMethod'],
     where: dailyWhere,
     _sum: {
       totalAmount: true
@@ -510,15 +585,157 @@ const getSalesSummary = async (queryParams = {}) => {
     }
   });
   
+  // Format payment methods data
+  const paymentMethodsData = dailyPaymentMethods.map(method => ({
+    method: method.paymentMethod,
+    count: method._count,
+    total: method._sum.totalAmount || 0
+  }));
+  
   return {
     dailyTotalSales: dailyTotalSales._sum.totalAmount || 0,
     dailyTotalOrders: dailyTotalSales._count || 0,
+    paymentMethods: paymentMethodsData,
     topSellingProducts,
     recentOrders,
     timeInfo: {
       day: today.toISOString().split('T')[0],
       month: firstDayOfMonth.toISOString().split('T')[0].substring(0, 7)
     }
+  };
+};
+
+/**
+ * Service to get available payment methods
+ * @returns {Array} List of payment methods
+ */
+const getPaymentMethods = async () => {
+  const settings = await prisma.paymentMethodSetting.findMany({
+    where: {
+      isEnabled: true
+    },
+    orderBy: {
+      sortOrder: 'asc'
+    }
+  });
+  
+  return {
+    methods: settings.map(setting => ({
+      id: setting.method,
+      name: setting.name,
+      description: setting.description,
+      requiresProof: setting.requiresProof
+    }))
+  };
+};
+
+/**
+ * Service to get daily sales report
+ * @param {String} date - Date to generate report for
+ * @returns {Object} Daily sales report data
+ */
+const getDailySalesReport = async (date) => {
+  if (!date) {
+    throw new Error('Date parameter is required');
+  }
+
+  // Parse the date and set start/end of the day
+  const reportDate = new Date(date);
+  reportDate.setHours(0, 0, 0, 0);
+  
+  const nextDay = new Date(reportDate);
+  nextDay.setDate(nextDay.getDate() + 1);
+  
+  // Find all completed orders for the selected date
+  const completedOrders = await prisma.order.findMany({
+    where: {
+      status: 'COMPLETED',
+      createdAt: {
+        gte: reportDate,
+        lt: nextDay
+      }
+    },
+    include: {
+      orderItems: {
+        include: {
+          product: true
+        }
+      }
+    }
+  });
+  
+  // Calculate totals
+  const totalSales = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalOrders = completedOrders.length;
+  
+  // Calculate product sales
+  const productSalesMap = {};
+  
+  completedOrders.forEach(order => {
+    order.orderItems.forEach(item => {
+      const { product, quantity, subtotal } = item;
+      
+      if (!productSalesMap[product.id]) {
+        productSalesMap[product.id] = {
+          productId: product.id,
+          name: product.name,
+          category: product.category,
+          price: product.price,
+          imageUrl: product.imageUrl,
+          quantitySold: 0,
+          revenue: 0
+        };
+      }
+      
+      productSalesMap[product.id].quantitySold += quantity;
+      productSalesMap[product.id].revenue += subtotal;
+    });
+  });
+  
+  const productSales = Object.values(productSalesMap).sort((a, b) => b.revenue - a.revenue);
+  const totalItems = productSales.reduce((sum, product) => sum + product.quantitySold, 0);
+  
+  // Calculate sales by payment method
+  const paymentMethodData = await prisma.order.groupBy({
+    by: ['paymentMethod'],
+    where: {
+      status: 'COMPLETED',
+      createdAt: {
+        gte: reportDate,
+        lt: nextDay
+      }
+    },
+    _sum: {
+      totalAmount: true
+    },
+    _count: true
+  });
+  
+  // Get payment method settings for names
+  const paymentMethodSettings = await prisma.paymentMethodSetting.findMany();
+  const methodSettingsMap = paymentMethodSettings.reduce((map, setting) => {
+    map[setting.method] = setting;
+    return map;
+  }, {});
+  
+  // Format payment methods data
+  const paymentMethods = paymentMethodData.map(method => {
+    const setting = methodSettingsMap[method.paymentMethod];
+    return {
+      method: method.paymentMethod,
+      name: setting ? setting.name : method.paymentMethod,
+      count: method._count,
+      amount: method._sum.totalAmount || 0
+    };
+  });
+  
+  return {
+    date: reportDate,
+    totalSales,
+    totalOrders,
+    totalItems,
+    paymentMethods,
+    productSales
   };
 };
 
@@ -531,5 +748,7 @@ module.exports = {
   getAllOrders,
   getOrderById,
   getPendingOrdersCount,
-  getSalesSummary
+  getSalesSummary,
+  getPaymentMethods,
+  getDailySalesReport
 };
