@@ -60,7 +60,41 @@ const updatePaymentMethodSetting = async (req, res) => {
   }
 };
 
+/**
+ * Controller to get details for a specific payment method
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getPaymentMethodDetail = async (req, res) => {
+  try {
+    const method = req.params.method;
+    
+    const paymentMethod = await paymentSettingsService.getPaymentMethodDetail(method);
+    
+    res.status(200).json({
+      success: true,
+      data: paymentMethod
+    });
+  } catch (error) {
+    console.error('Error getting payment method detail:', error);
+    
+    if (error.message.includes('not found')) {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to get payment method detail',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllPaymentMethodSettings,
-  updatePaymentMethodSetting
+  updatePaymentMethodSetting,
+  getPaymentMethodDetail
 };

@@ -54,22 +54,49 @@ const updatePaymentMethodSetting = async (id, data) => {
     throw new Error('Payment method setting not found');
   }
   
+  // Create update data without the name field to ensure it can't be changed
+  const updateData = {
+    // Don't include name here to prevent updates to it
+    description: data.description,
+    isEnabled: data.isEnabled !== undefined ? data.isEnabled : setting.isEnabled,
+    requiresProof: data.requiresProof !== undefined ? data.requiresProof : setting.requiresProof,
+    sortOrder: data.sortOrder !== undefined ? data.sortOrder : setting.sortOrder,
+    bankName: data.bankName,
+    accountNumber: data.accountNumber,
+    accountHolder: data.accountHolder
+  };
+  
   const updatedSetting = await prisma.paymentMethodSetting.update({
     where: { id: parseInt(id) },
-    data: {
-      name: data.name !== undefined ? data.name : setting.name,
-      description: data.description,
-      isEnabled: data.isEnabled !== undefined ? data.isEnabled : setting.isEnabled,
-      requiresProof: data.requiresProof !== undefined ? data.requiresProof : setting.requiresProof,
-      sortOrder: data.sortOrder !== undefined ? data.sortOrder : setting.sortOrder
-    }
+    data: updateData
   });
   
   return updatedSetting;
 };
 
+/**
+ * Service to get details for a specific payment method
+ * @param {string} method - Payment method identifier
+ * @returns {Promise<Object>} Payment method details
+ */
+const getPaymentMethodDetail = async (method) => {
+  const setting = await prisma.paymentMethodSetting.findFirst({
+    where: { 
+      method,
+      isEnabled: true
+    }
+  });
+  
+  if (!setting) {
+    throw new Error('Payment method not found or not enabled');
+  }
+  
+  return setting;
+};
+
 module.exports = {
   getAllPaymentMethodSettings,
   getAvailablePaymentMethods,
-  updatePaymentMethodSetting
+  updatePaymentMethodSetting,
+  getPaymentMethodDetail
 };

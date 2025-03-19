@@ -7,7 +7,7 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = env("DATABASE_URL_DEV")
 }
 
 model Admin {
@@ -99,12 +99,18 @@ enum PaymentMethod {
 
 model PaymentMethodSetting {
   id            Int       @id @default(autoincrement())
-  method        String    @unique // e.g. "BANK_TRANSFER", "CASH", etc.
-  name          String    // Display name
-  description   String?   // Optional description
+  method        String    @unique
+  name          String
+  description   String?
   isEnabled     Boolean   @default(true)
   requiresProof Boolean   @default(false)
-  sortOrder     Int       @default(0) // For controlling display order
+  sortOrder     Int       @default(0)
+  
+  // New fields for bank transfer details
+  bankName      String?
+  accountNumber String?
+  accountHolder String?
+  
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 }

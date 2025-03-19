@@ -4,6 +4,8 @@ const router = express.Router();
 const paymentSettingsController = require('../controllers/payment-settings.controller');
 const { authenticateAdmin, requireMasterAdmin } = require('../middleware/auth.middleware');
 
+router.get('/method/:method', paymentSettingsController.getPaymentMethodDetail);
+
 // All routes require authentication
 router.use(authenticateAdmin);
 
