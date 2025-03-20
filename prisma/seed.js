@@ -66,9 +66,9 @@ async function main() {
     { 
       method: 'QRIS', 
       name: 'QRIS', 
-      description: 'Pay with QRIS (coming soon)',
-      isEnabled: false,
-      requiresProof: false,
+      description: 'Pay with QRIS',
+      isEnabled: true,
+      requiresProof: true,
       sortOrder: 3
     },
   ];
