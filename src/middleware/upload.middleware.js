@@ -1,8 +1,11 @@
+// src/middleware/upload.middleware.js
 const { 
   uploadPaymentProof, 
   uploadProductImage, 
+  uploadQrisImage,
   compressPaymentProof, 
-  compressProductImage 
+  compressProductImage,
+  compressQrisImage
 } = require('../utils/file-upload');
 
 /**
@@ -63,7 +66,37 @@ const handleProductImageUpload = (req, res, next) => {
   });
 };
 
+/**
+ * Middleware to handle QRIS image uploads with compression
+ */
+const handleQrisImageUpload = (req, res, next) => {
+  const upload = uploadQrisImage.single('qrisImage');
+  
+  upload(req, res, (err) => {
+    if (err) {
+      return res.status(400).json({
+        success: false,
+        message: 'Error uploading QRIS image',
+        error: err.message
+      });
+    }
+    
+    // Proceed to compression middleware
+    compressQrisImage(req, res, (err) => {
+      if (err) {
+        return res.status(500).json({
+          success: false,
+          message: 'Error compressing QRIS image',
+          error: err.message
+        });
+      }
+      next();
+    });
+  });
+};
+
 module.exports = {
   handlePaymentProofUpload,
-  handleProductImageUpload
+  handleProductImageUpload,
+  handleQrisImageUpload
 };

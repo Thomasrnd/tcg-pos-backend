@@ -399,6 +399,40 @@ const getPaymentMethods = async (req, res) => {
   }
 };
 
+/**
+ * Controller to get date range sales report
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const getDateRangeSalesReport = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        success: false,
+        message: 'Start date and end date parameters are required'
+      });
+    }
+
+    // Call service to get date range sales report
+    const reportData = await orderService.getDateRangeSalesReport({ startDate, endDate });
+    
+    res.status(200).json({
+      success: true,
+      data: reportData
+    });
+  } catch (error) {
+    console.error('Error generating date range sales report:', error);
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to generate date range sales report',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   createOrder,
   uploadPaymentProof,
@@ -410,5 +444,6 @@ module.exports = {
   getPendingOrdersCount,
   getSalesSummary,
   getDailySalesReport,
-  getPaymentMethods
+  getPaymentMethods,
+  getDateRangeSalesReport
 };

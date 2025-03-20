@@ -64,21 +64,13 @@ async function main() {
       sortOrder: 2
     },
     { 
-      method: 'CREDIT_CARD', 
-      name: 'Credit Card', 
-      description: 'Pay with credit card (coming soon)',
-      isEnabled: false,
-      requiresProof: false,
+      method: 'QRIS', 
+      name: 'QRIS', 
+      description: 'Pay with QRIS',
+      isEnabled: true,
+      requiresProof: true,
       sortOrder: 3
     },
-    { 
-      method: 'E_WALLET', 
-      name: 'E-Wallet', 
-      description: 'Pay with e-wallet (coming soon)',
-      isEnabled: false,
-      requiresProof: false,
-      sortOrder: 4
-    }
   ];
 
   for (const method of paymentMethods) {

@@ -210,7 +210,7 @@ const verifyPayment = async (orderId) => {
   
   // Handle different payment methods based on their settings
   if (paymentMethodSetting.requiresProof) {
-    // For methods that require proof (like bank transfer)
+    // For methods that require proof (like bank transfer or QRIS)
     if (order.status !== 'PAYMENT_UPLOADED') {
       throw new Error('Only orders with uploaded payment can be verified');
     }
@@ -454,29 +454,52 @@ const getOrderById = async (orderId) => {
 
 /**
  * Service to get pending orders count for notifications
- * @returns {number} Count of pending orders with uploaded payments
+ * @returns {Object} Count data with different statuses
  */
 const getPendingOrdersCount = async () => {
+  // Get payment methods that require verification
+  const requiresVerificationMethods = await prisma.paymentMethodSetting.findMany({
+    where: {
+      requiresProof: true,
+      isEnabled: true
+    },
+    select: {
+      method: true
+    }
+  });
+  
+  const methodsRequiringVerification = requiresVerificationMethods.map(m => m.method);
+  
   // Bank transfer orders with uploaded payment proofs
-  const bankTransferCount = await prisma.order.count({
+  const paymentUploadedCount = await prisma.order.count({
     where: {
       status: 'PAYMENT_UPLOADED',
-      paymentMethod: 'BANK_TRANSFER'
+      paymentMethod: {
+        in: methodsRequiringVerification
+      }
     }
   });
   
   // Cash orders waiting to be completed
-  const cashCount = await prisma.order.count({
+  const cashVerifiedCount = await prisma.order.count({
     where: {
       status: 'PAYMENT_VERIFIED',
       paymentMethod: 'CASH'
     }
   });
   
+  // Regular pending orders
+  const pendingCount = await prisma.order.count({
+    where: {
+      status: 'PENDING'
+    }
+  });
+  
   return { 
-    count: bankTransferCount + cashCount,
-    bankTransferCount,
-    cashCount
+    total: paymentUploadedCount + cashVerifiedCount + pendingCount,
+    paymentUploadedCount,
+    cashVerifiedCount,
+    pendingCount
   };
 };
 
@@ -658,7 +681,11 @@ const getDailySalesReport = async (date) => {
     include: {
       orderItems: {
         include: {
-          product: true
+          product: {
+            include: {
+              category: true
+            }
+          }
         }
       }
     }
@@ -679,7 +706,7 @@ const getDailySalesReport = async (date) => {
         productSalesMap[product.id] = {
           productId: product.id,
           name: product.name,
-          category: product.category,
+          category: product.category?.name || 'Unknown',
           price: product.price,
           imageUrl: product.imageUrl,
           quantitySold: 0,
@@ -729,13 +756,154 @@ const getDailySalesReport = async (date) => {
     };
   });
   
+  // Calculate sales by category
+  const categoryMap = {};
+  completedOrders.forEach(order => {
+    order.orderItems.forEach(item => {
+      const categoryName = item.product.category?.name || 'Unknown';
+      
+      if (!categoryMap[categoryName]) {
+        categoryMap[categoryName] = {
+          name: categoryName,
+          itemsSold: 0,
+          revenue: 0
+        };
+      }
+      
+      categoryMap[categoryName].itemsSold += item.quantity;
+      categoryMap[categoryName].revenue += item.subtotal;
+    });
+  });
+  
+  const categorySales = Object.values(categoryMap).sort((a, b) => b.revenue - a.revenue);
+  
   return {
     date: reportDate,
     totalSales,
     totalOrders,
     totalItems,
     paymentMethods,
-    productSales
+    productSales,
+    categorySales,
+    orders: completedOrders.map(order => ({
+      id: order.id,
+      customerName: order.customerName,
+      totalAmount: order.totalAmount,
+      paymentMethod: order.paymentMethod,
+      createdAt: order.createdAt
+    }))
+  };
+};
+
+/**
+ * Service to get sales summary for a date range
+ * @param {Object} params - Query parameters including start and end dates
+ * @returns {Object} Sales summary data
+ */
+const getDateRangeSalesReport = async (params = {}) => {
+  const { startDate, endDate } = params;
+  
+  if (!startDate || !endDate) {
+    throw new Error('Start date and end date are required');
+  }
+  
+  const start = new Date(startDate);
+  start.setHours(0, 0, 0, 0);
+  
+  const end = new Date(endDate);
+  end.setHours(23, 59, 59, 999);
+  
+  // Find all completed orders for the date range
+  const completedOrders = await prisma.order.findMany({
+    where: {
+      status: 'COMPLETED',
+      createdAt: {
+        gte: start,
+        lte: end
+      }
+    },
+    include: {
+      orderItems: {
+        include: {
+          product: {
+            include: {
+              category: true
+            }
+          }
+        }
+      }
+    },
+    orderBy: {
+      createdAt: 'asc'
+    }
+  });
+  
+  // Calculate daily totals
+  const dailyTotals = {};
+  completedOrders.forEach(order => {
+    const dateStr = order.createdAt.toISOString().split('T')[0];
+    if (!dailyTotals[dateStr]) {
+      dailyTotals[dateStr] = {
+        date: dateStr,
+        sales: 0,
+        orders: 0
+      };
+    }
+    dailyTotals[dateStr].sales += order.totalAmount;
+    dailyTotals[dateStr].orders += 1;
+  });
+  
+  const dailySales = Object.values(dailyTotals);
+  
+  // Calculate totals
+  const totalSales = completedOrders.reduce((sum, order) => sum + order.totalAmount, 0);
+  const totalOrderCount = completedOrders.length;
+  
+  // Calculate payment method breakdown
+  const paymentMethodMap = {};
+  completedOrders.forEach(order => {
+    if (!paymentMethodMap[order.paymentMethod]) {
+      paymentMethodMap[order.paymentMethod] = {
+        method: order.paymentMethod,
+        count: 0,
+        amount: 0
+      };
+    }
+    paymentMethodMap[order.paymentMethod].count += 1;
+    paymentMethodMap[order.paymentMethod].amount += order.totalAmount;
+  });
+  
+  const paymentMethods = Object.values(paymentMethodMap);
+  
+  // Calculate category breakdown
+  const categoryMap = {};
+  completedOrders.forEach(order => {
+    order.orderItems.forEach(item => {
+      const categoryName = item.product.category?.name || 'Unknown';
+      
+      if (!categoryMap[categoryName]) {
+        categoryMap[categoryName] = {
+          name: categoryName,
+          itemsSold: 0,
+          revenue: 0
+        };
+      }
+      
+      categoryMap[categoryName].itemsSold += item.quantity;
+      categoryMap[categoryName].revenue += item.subtotal;
+    });
+  });
+  
+  const categorySales = Object.values(categoryMap);
+  
+  return {
+    startDate,
+    endDate,
+    totalSales,
+    totalOrderCount,
+    dailySales,
+    paymentMethods,
+    categorySales
   };
 };
 
@@ -750,5 +918,6 @@ module.exports = {
   getPendingOrdersCount,
   getSalesSummary,
   getPaymentMethods,
-  getDailySalesReport
+  getDailySalesReport,
+  getDateRangeSalesReport
 };

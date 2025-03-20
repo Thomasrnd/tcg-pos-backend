@@ -19,9 +19,11 @@ const config = {
     dir: process.env.UPLOAD_DIR || 'uploads',
     paymentProofs: '/payment-proofs',
     products: '/products',
+    qris: '/qris',
     maxSize: {
       paymentProof: 5 * 1024 * 1024, // 5MB
       productImage: 2 * 1024 * 1024, // 2MB
+      qrisImage: 2 * 1024 * 1024, // 2MB
     },
   },
 
