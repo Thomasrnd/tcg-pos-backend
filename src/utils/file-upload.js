@@ -1,7 +1,9 @@
+// src/utils/file-upload.js
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const sharp = require('sharp');
+const config = require('../config/app');
 
 // Ensure the upload directory exists
 const createUploadDir = (dir) => {
@@ -36,6 +38,19 @@ const productImageStorage = multer.diskStorage({
   }
 });
 
+// Configure storage for QRIS images
+const qrisImageStorage = multer.diskStorage({
+  destination: (req, file, cb) => {
+    const uploadDir = path.join(__dirname, '../../uploads/qris');
+    createUploadDir(uploadDir);
+    cb(null, uploadDir);
+  },
+  filename: (req, file, cb) => {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
+    cb(null, `qris-${uniqueSuffix}.jpg`); // We'll convert all images to JPG
+  }
+});
+
 // File filter to accept only images
 const imageFilter = (req, file, cb) => {
   const allowedTypes = /jpeg|jpg|png|gif|webp/;
@@ -58,6 +73,12 @@ const uploadPaymentProof = multer({
 
 const uploadProductImage = multer({
   storage: productImageStorage,
+  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
+  fileFilter: imageFilter
+});
+
+const uploadQrisImage = multer({
+  storage: qrisImageStorage,
   limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
   fileFilter: imageFilter
 });
@@ -112,9 +133,36 @@ const compressProductImage = async (req, res, next) => {
   }
 };
 
+// Compress QRIS image
+const compressQrisImage = async (req, res, next) => {
+  if (!req.file) {
+    return next();
+  }
+
+  try {
+    const imagePath = req.file.path;
+    
+    // Compress and resize the image
+    await sharp(imagePath)
+      .resize(1000) // Resize to max width of 1000px (maintains aspect ratio)
+      .jpeg({ quality: 80 }) // Convert to JPEG with 80% quality
+      .toBuffer()
+      .then(buffer => {
+        fs.writeFileSync(imagePath, buffer); // Overwrite the original file
+      });
+    
+    next();
+  } catch (error) {
+    console.error('Error compressing QRIS image:', error);
+    next(error);
+  }
+};
+
 module.exports = {
   uploadPaymentProof,
   uploadProductImage,
+  uploadQrisImage,
   compressPaymentProof,
-  compressProductImage
+  compressProductImage,
+  compressQrisImage
 };

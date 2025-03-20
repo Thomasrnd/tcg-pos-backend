@@ -19,5 +19,6 @@ router.post('/:id/cancel', authenticateAdmin, orderController.cancelOrder);
 router.get('/notifications/pending-count', authenticateAdmin, orderController.getPendingOrdersCount);
 router.get('/analytics/sales-summary', authenticateAdmin, orderController.getSalesSummary);
 router.get('/analytics/daily-sales', authenticateAdmin, orderController.getDailySalesReport);
+router.get('/analytics/date-range-sales', authenticateAdmin, orderController.getDateRangeSalesReport);
 
 module.exports = router;

@@ -93,8 +93,58 @@ const getPaymentMethodDetail = async (req, res) => {
   }
 };
 
+/**
+ * Controller to upload QRIS image
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const uploadQrisImage = async (req, res) => {
+  try {
+    const id = req.params.id;
+    const fileInfo = req.file;
+    
+    if (!fileInfo) {
+      return res.status(400).json({
+        success: false,
+        message: 'QRIS image is required'
+      });
+    }
+    
+    const updatedSetting = await paymentSettingsService.uploadQrisImage(id, fileInfo);
+    
+    res.status(200).json({
+      success: true,
+      message: 'QRIS image uploaded successfully',
+      data: updatedSetting
+    });
+  } catch (error) {
+    console.error('Error uploading QRIS image:', error);
+    
+    if (error.message === 'Payment method setting not found') {
+      return res.status(404).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    if (error.message.includes('QRIS payment method')) {
+      return res.status(400).json({
+        success: false,
+        message: error.message
+      });
+    }
+    
+    res.status(500).json({
+      success: false,
+      message: 'Failed to upload QRIS image',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllPaymentMethodSettings,
   updatePaymentMethodSetting,
-  getPaymentMethodDetail
+  getPaymentMethodDetail,
+  uploadQrisImage
 };

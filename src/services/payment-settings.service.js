@@ -1,5 +1,8 @@
 // src/services/payment-settings.service.js
 const { prisma } = require('../config/db');
+const config = require('../config/app');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Service to get all payment method settings
@@ -54,21 +57,18 @@ const updatePaymentMethodSetting = async (id, data) => {
     throw new Error('Payment method setting not found');
   }
   
-  // Create update data without the name field to ensure it can't be changed
-  const updateData = {
-    // Don't include name here to prevent updates to it
-    description: data.description,
-    isEnabled: data.isEnabled !== undefined ? data.isEnabled : setting.isEnabled,
-    requiresProof: data.requiresProof !== undefined ? data.requiresProof : setting.requiresProof,
-    sortOrder: data.sortOrder !== undefined ? data.sortOrder : setting.sortOrder,
-    bankName: data.bankName,
-    accountNumber: data.accountNumber,
-    accountHolder: data.accountHolder
-  };
-  
   const updatedSetting = await prisma.paymentMethodSetting.update({
     where: { id: parseInt(id) },
-    data: updateData
+    data: {
+      // Exclude name to prevent it from being updated
+      description: data.description,
+      isEnabled: data.isEnabled !== undefined ? data.isEnabled : setting.isEnabled,
+      requiresProof: data.requiresProof !== undefined ? data.requiresProof : setting.requiresProof,
+      sortOrder: data.sortOrder !== undefined ? data.sortOrder : setting.sortOrder,
+      bankName: data.bankName,
+      accountNumber: data.accountNumber,
+      accountHolder: data.accountHolder
+    }
   });
   
   return updatedSetting;
@@ -94,9 +94,51 @@ const getPaymentMethodDetail = async (method) => {
   return setting;
 };
 
+/**
+ * Service to upload QRIS image for a payment method
+ * @param {number} id - Payment method setting ID
+ * @param {Object} fileInfo - QRIS image file info
+ * @returns {Promise<Object>} Updated payment method setting
+ */
+const uploadQrisImage = async (id, fileInfo) => {
+  const setting = await prisma.paymentMethodSetting.findUnique({
+    where: { id: parseInt(id) }
+  });
+  
+  if (!setting) {
+    throw new Error('Payment method setting not found');
+  }
+  
+  if (setting.method !== 'QRIS') {
+    throw new Error('QRIS image can only be uploaded for QRIS payment method');
+  }
+  
+  // Create relative path for the QRIS image
+  const relativePath = `/${config.uploads.dir}/qris/${fileInfo.filename}`;
+  
+  // Delete old QRIS image if exists
+  if (setting.qrisImageUrl) {
+    const oldImagePath = path.join(__dirname, '../../', setting.qrisImageUrl);
+    if (fs.existsSync(oldImagePath)) {
+      fs.unlinkSync(oldImagePath);
+    }
+  }
+  
+  // Update QRIS image URL
+  const updatedSetting = await prisma.paymentMethodSetting.update({
+    where: { id: parseInt(id) },
+    data: {
+      qrisImageUrl: relativePath
+    }
+  });
+  
+  return updatedSetting;
+};
+
 module.exports = {
   getAllPaymentMethodSettings,
   getAvailablePaymentMethods,
   updatePaymentMethodSetting,
-  getPaymentMethodDetail
+  getPaymentMethodDetail,
+  uploadQrisImage
 };
